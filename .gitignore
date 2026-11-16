@@ -1,0 +1,15 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.venv/
+.env
+.env.*
+!.env.example
+.nextgpt/
+generated/
+*.p12
+*.p8
+*.pem
+*.key
+*.mobileprovision
+.DS_Store
