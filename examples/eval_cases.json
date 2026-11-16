@@ -1,0 +1,5 @@
+[
+  {"id": "greeting", "actual": "Hello", "expected": "Hello"},
+  {"id": "safe-default", "actual": true, "expected": true},
+  {"id": "no-secret", "actual": "redacted", "expected": "redacted"}
+]
