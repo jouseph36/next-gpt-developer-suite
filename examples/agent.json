@@ -1,0 +1,7 @@
+{
+  "name": "developer-agent",
+  "purpose": "Help plan and review developer workflows",
+  "tools": ["read_repository", "run_tests"],
+  "requires_approval_for_writes": true,
+  "external_network_enabled": false
+}
