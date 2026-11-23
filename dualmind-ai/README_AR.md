@@ -1,3 +1,40 @@
+# DualMind AI — Gemini وGroq وOpenAI وClaude في تطبيق واحد
+
+> هذا تطبيق مستقل يعمل على Render؛ ليس الكود الداخلي للشركات. دعم Gemini وGroq يمنح فرصة استخدام **الحصص المجانية عند توافرها**، وليس استخدامًا غير محدود أو مضمونًا لكل بلد وحساب.
+
+## تشغيل النسخة المجانية من iPhone
+
+1. افتح https://aistudio.google.com/api-keys وأنشئ Gemini API key لحساب مؤهل للحصة المجانية.
+2. أو افتح https://console.groq.com/keys وأنشئ Groq API key؛ لخطة Groq المجانية حدود معدل وطلبات.
+3. افتح لوحة Render الخاصة بمشروعك: https://dashboard.render.com/web/srv-dc1sr256e07s73e9vdcg
+4. من Environment أضف `GEMINI_API_KEY` و/أو `GROQ_API_KEY` مع القيمة المطلوبة هناك؛ **لا ترفع أي مفتاح إلى GitHub ولا ترسله في المحادثة.**
+5. بعد Save and deploy، افتح https://dualmind-ai-jouseph.onrender.com وادخل كلمة مرور `APP_PASSWORD` من إعدادات التطبيق.
+6. اختر Gemini أو Groq. يمكن مقارنة الردين فقط إذا أضفت المفتاحين معًا. Groq في هذه النسخة للنصوص فقط؛ Gemini يقبل الصور وPDF.
+7. البحث عبر الويب مع Gemini وGroq **معطل** داخل وضع الحصص المجانية لتجنب تشغيل أدوات قد تُحاسب عليها. ويمكن استخدامه مع مزودين مدفوعين حسب حسابك.
+
+### أسماء النماذج الافتراضية
+
+- Gemini: `gemini-3.5-flash-lite` و `gemini-3.8-flash`.
+- Groq: `openai/gpt-oss-20b` و `openai/gpt-oss-120b`.
+- يمكن تعديلها من متغيرات Environment إذا تغيّرت إتاحة النماذج.
+
+### خصوصية الحصص المجانية
+
+Google وGroq تطبقان سياسات استخدام ومعالجة بيانات خاصة بهما. بحسب صفحة تسعير Gemini، قد تُستخدم المدخلات المرسلة عبر فئات مجانية لتحسين منتجات Google؛ لا ترسل بيانات مالية حساسة إلى واجهة API مجانية دون مراجعة سياسة المزود. الاستضافة على Render لا تجعل محتوى الاستفسار محليًا؛ يُرسل الطلب لمزود النموذج المختار.
+
+### التكاليف
+
+يُمكن أن تعمل على مستوى مجاني، لكن **بعض حسابات Gemini غير مؤهلة للحصة المجانية حاليًا**، كما أن تجاوز الحدود يعرض أخطاء مثل `429`، وليس حقًا في استهلاك غير محدود. لا تشغّل فوترة مدفوعة دون ضبط الحدود وفهم الأسعار. باقات ChatGPT Plus وClaude Pro منفصلة عن API.
+
+## التوثيق
+
+- https://ai.google.dev/gemini-api/docs/pricing
+- https://ai.google.dev/gemini-api/docs
+- https://console.groq.com/docs/rate-limits
+- https://console.groq.com/docs/text-chat
+
+---
+
 # DualMind AI — تطبيق مفتوح الكود يجمع OpenAI وClaude
 
 > **ليس** كود ChatGPT أو Claude الداخلي ولا نموذجًا مستقلاً بذاته. هذا التطبيق من كتابة مستقلة، يتصل بواجهات API الأصلية عبر مفاتيحك الشخصية.
