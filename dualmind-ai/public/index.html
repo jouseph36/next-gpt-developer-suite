@@ -1,0 +1,32 @@
+<!doctype html>
+<html lang="ar" dir="rtl">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#111827">
+  <title>DualMind AI — ChatGPT + Claude</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="top"><div class="brand"><span class="logo">D</span><div><strong>DualMind AI</strong><small>OpenAI + Anthropic | استضافة خاصة</small></div></div><div class="topactions"><button id="clear">محادثة جديدة</button><button id="export">تصدير</button></div></header>
+  <main>
+    <aside class="options">
+      <h2>التحكم</h2>
+      <label>مزود الذكاء الاصطناعي<select id="provider"><option value="openai">OpenAI · GPT</option><option value="anthropic">Anthropic · Claude</option></select></label>
+      <label>النموذج<select id="model"></select></label>
+      <label>كلمة مرور التطبيق<input id="password" type="password" placeholder="APP_PASSWORD" autocomplete="off"></label>
+      <button id="savePass" class="secondary">حفظ كلمة المرور لهذه الجلسة</button>
+      <label class="checkbox"><input type="checkbox" id="compare"> قارن الردود بين OpenAI وClaude</label>
+      <p id="status">جاري التحقق من إعدادات الخادم…</p>
+      <p class="notice">تُحفظ المحادثات في متصفحك المحلي، وتُرسل الرسائل إلى مزود النموذج الذي تختاره. لا تُرفع مفاتيح API إلى المتصفح.</p>
+      <button id="wipe" class="danger">حذف السجل المحلي</button>
+    </aside>
+    <section class="chat">
+      <div class="messages" id="messages"><div class="welcome"><h1>مساعد واحد، نموذجان</h1><p>اكتب سؤالك، واختر GPT أو Claude، أو شغّل المقارنة بينهما.</p></div></div>
+      <form id="composer"><textarea id="prompt" rows="2" placeholder="اكتب رسالتك هنا..." required></textarea><button type="submit" id="send">إرسال</button></form>
+      <p class="footnote">التطبيق يعتمد على مفاتيح API الخاصة بك؛ قد تترتب رسوم استخدام منفصلة.</p>
+    </section>
+  </main>
+  <script src="/app.js" defer></script>
+</body>
+</html>
