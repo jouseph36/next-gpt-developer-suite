@@ -50,9 +50,11 @@ const server=http.createServer(async(req,res)=>{
       const answer=await ask(provider,input.model,messages);return reply(res,200,{answer,provider,model:input.model});
     }catch(e){return reply(res,400,{error:String(e.message||e).slice(0,400)});}
   }
-  if(url==='/'&&req.method==='GET'){
-    try{const html=await readFile(path.join(ROOT,'public','index.html'));res.writeHead(200,{...headers,'Content-Type':'text/html; charset=utf-8'});return res.end(html);}
-    catch{return reply(res,500,{error:'UI missing'});}
+  const files={'/':['public','index.html','text/html; charset=utf-8'],'/app.js':['public','app.js','text/javascript; charset=utf-8'],'/style.css':['public','style.css','text/css; charset=utf-8']};
+  if(files[url]&&req.method==='GET'){
+    const [folder,file,mime]=files[url];
+    try{const data=await readFile(path.join(ROOT,folder,file));res.writeHead(200,{...headers,'Content-Type':mime});return res.end(data);}
+    catch{return reply(res,500,{error:'UI file missing'});}
   }
   return reply(res,404,{error:'Not found'});
 });
