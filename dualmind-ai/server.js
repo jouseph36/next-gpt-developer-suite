@@ -109,7 +109,7 @@ export const server=http.createServer(async(req,res)=>{
           if(typeof upstreamError?.message === 'string') detail = upstreamError.message;
         } catch {/* Some providers return non-JSON error bodies. */}
         detail = detail.replace(/sk-(?:proj-)?[a-zA-Z0-9_-]+/g,'[REDACTED]')
-          .replace(/(Authorization|x-api-key)\\s*[:=]\\s*[^\\s,;]+/gi,'$1=[REDACTED]')
+          .replace(/(Authorization|x-api-key)\s*[:=]\s*[^\s,;]+/gi,'$1=[REDACTED]')
           .slice(0,280);
         return send(res,upstream.status,{error:`${payload.provider} (${upstream.status})${category ? ' ' + category : ''}: ${detail || hints[upstream.status] || 'تعذّر تنفيذ الطلب لدى المزوّد.'}`});
       }
