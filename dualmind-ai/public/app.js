@@ -57,8 +57,8 @@ function renderSidebar(){const list=$('chatList');list.replaceChildren();const q
  }
 }
 function renderMessages(){const chat=activeChat();$('conversationTitle').textContent=chat?.title||'محادثة جديدة';$('welcome').style.display=chat?.messages.length?'none':'block';const pane=$('messages');pane.replaceChildren();
- for(const message of chat?.messages||[]){const node=document.createElement('article');node.className='message '+message.role;const meta=document.createElement('div');meta.className='message-meta';const avatar=document.createElement('span');avatar.className='avatar';avatar.textContent=message.role==='user'?'أ':message.provider==='anthropic'?'C':'G';meta.append(avatar);
- const label=document.createElement('span');label.textContent=message.role==='user'?'أنت':`${message.provider==='anthropic'?'Claude':'OpenAI'} · ${message.model||''}`;meta.append(label);
+ for(const message of chat?.messages||[]){const node=document.createElement('article');node.className='message '+message.role;const meta=document.createElement('div');meta.className='message-meta';const avatar=document.createElement('span');avatar.className='avatar';avatar.textContent=message.role==='user'?'أ':({anthropic:'C',openai:'G',gemini:'M',groq:'Q'}[message.provider]||'✦');meta.append(avatar);
+ const label=document.createElement('span');label.textContent=message.role==='user'?'أنت':`${({anthropic:'Claude',openai:'OpenAI',gemini:'Gemini',groq:'Groq'}[message.provider]||'AI')} · ${message.model||''}`;meta.append(label);
  if(message.text){const copy=document.createElement('button');copy.textContent='نسخ';copy.addEventListener('click',async()=>{try{await navigator.clipboard.writeText(message.text);toast('تم النسخ');}catch{toast('تعذر النسخ');}});meta.append(copy);}
  const bubble=document.createElement('div');bubble.className='bubble';bubble.innerHTML=message.role==='assistant'?renderMarkdown(message.text):escapeHtml(message.text);if(message.pending&&!message.text){bubble.classList.add('thinking');bubble.textContent='جارٍ التفكير…';}
  node.append(meta,bubble);
@@ -70,7 +70,18 @@ function renderAttachments(){const pane=$('attachments');pane.replaceChildren();
  state.files.forEach((file,index)=>{const chip=document.createElement('div');chip.className='attachment';const span=document.createElement('span');span.textContent=`📎 ${file.name}`;const rm=document.createElement('button');rm.textContent='×';rm.ariaLabel='إزالة المرفق';rm.onclick=()=>{state.files.splice(index,1);renderAttachments();};chip.append(span,rm);pane.append(chip);});}
 function renderAll(){renderSidebar();renderMessages();renderAttachments();}
 function modelsFor(provider){return state.config?.models?.[provider]||[];}
-function applyModels(){const provider=$('provider').value;const select=$('model');const current=select.value;select.replaceChildren();for(const model of modelsFor(provider)){const option=document.createElement('option');option.value=model;option.textContent=model;select.append(option);}if(modelsFor(provider).includes(current))select.value=current;const available=state.config?.providers||{};$('providerStatus').textContent=`OpenAI: ${available.openai?'المفتاح مضاف':'بانتظار المفتاح'} · Claude: ${available.anthropic?'المفتاح مضاف':'بانتظار المفتاح'}`;}
+function applyModels(){
+ const provider=$('provider').value, select=$('model'), current=select.value;
+ select.replaceChildren();
+ for(const model of modelsFor(provider)){const option=document.createElement('option');option.value=model;option.textContent=model;select.append(option);}
+ if(modelsFor(provider).includes(current))select.value=current;
+ const available=state.config?.providers||{};
+ $('providerStatus').textContent=['gemini','groq','openai','anthropic'].map(p=>({gemini:'Gemini',groq:'Groq',openai:'GPT',anthropic:'Claude'}[p])+': '+(available[p]?'مفتاح موجود':'يلزم مفتاح')).join(' · ');
+ const free=['gemini','groq'].includes(provider);
+ if(free)$('webSearch').checked=false;
+ $('webSearch').disabled=free;
+ $('webSearch').title=free?'بحث الويب غير مفعّل للخطة المجانية':'بحث الويب قد يترتب عليه رسوم';
+}
 const b64FromFile=file=>new Promise((resolve,reject)=>{const reader=new FileReader();reader.onload=()=>resolve(String(reader.result).split(',')[1]);reader.onerror=reject;reader.readAsDataURL(file);});
 async function addAttachments(files){for(const file of files){if(state.files.length>=3){toast('الحد الأعلى 3 ملفات في الرسالة');break;}if(!['image/png','image/jpeg','image/webp','image/gif','application/pdf'].includes(file.type)){toast('مسموح صور وPDF فقط');continue;}if(file.size>3*1024*1024){toast(`${file.name}: الحد الأعلى 3 ميغابايت`);continue;}state.files.push({name:file.name,type:file.type,base64:await b64FromFile(file)});}renderAttachments();}
 function setBusy(v){state.busy=v;$('send').hidden=v;$('stop').hidden=!v;$('prompt').disabled=v;$('newChat').disabled=v;}
@@ -91,7 +102,11 @@ async function runModel(chat,provider,model){const message={id:id(),role:'assist
 }
 async function submit(){if(state.busy)return;const content=$('prompt').value.trim();if(!content&&!state.files.length)return;
  const available=state.config?.providers||{};const compare=$('compare').checked;const primary=$('provider').value;
- const jobs=compare?['openai','anthropic']:[primary];const valid=jobs.filter(p=>available[p]);if(!valid.length){toast('أضف مفتاح المزوّد في إعدادات Environment على Render');return;}
+ if(compare && !['gemini','groq'].includes(primary)){toast('المقارنة التلقائية متاحة بين Gemini وGroq فقط لتجنب استدعاءات API المدفوعة. ألغِ المقارنة لاستخدام GPT أو Claude.');return;}
+ const jobs=compare?['gemini','groq']:[primary];
+ if(compare && (!available.gemini || !available.groq)){toast('المقارنة المجانية تحتاج GEMINI_API_KEY و GROQ_API_KEY معًا');return;}
+ const valid=jobs.filter(p=>available[p]);if(!valid.length){toast('أضف مفتاح '+primary.toUpperCase()+'_API_KEY إلى Render → Environment، ولا ترسله داخل المحادثة.');return;}
+ if(state.files.length && valid.includes('groq')){toast('نماذج Groq الحالية تقبل النص فقط. استخدم Gemini للصور أو PDF.');return;}
  let chat=activeChat();if(!chat){chat=freshChat();state.chats.unshift(chat);state.current=chat.id;}
  const msg={id:id(),role:'user',text:content||'حلل المرفقات المضافة',attachments:state.files,created:Date.now()};chat.messages.push(msg);
  if(chat.title==='محادثة جديدة')chat.title=(content||state.files[0]?.name||'مرفق').slice(0,55);
@@ -103,7 +118,7 @@ function download(name,value){const blob=new Blob([value],{type:'application/jso
 function safeChats(data){return Array.isArray(data)&&data.length<300&&data.every(c=>c&&typeof c.id==='string'&&typeof c.title==='string'&&Array.isArray(c.messages)&&c.messages.length<500&&c.messages.every(m=>m&&typeof m.text==='string'&&['user','assistant'].includes(m.role)));}
 async function init(){await loadChats();await restorePreviousVersion();
  try{const res=await fetch('/api/config');state.config=await res.json();}catch{toast('تعذر الاتصال بالخادم');}
- $('provider').value=state.config?.providers?.anthropic&&!state.config?.providers?.openai?'anthropic':'openai';applyModels();if(state.chats.length)state.current=state.chats[0].id;renderAll();
+ $('provider').value=['gemini','groq','anthropic','openai'].find(p=>state.config?.providers?.[p])||'gemini';applyModels();if(state.chats.length)state.current=state.chats[0].id;renderAll();
  $('newChat').onclick=newChat;$('closeSide').onclick=()=>$('sidebar').classList.remove('open');$('openSide').onclick=()=>$('sidebar').classList.toggle('open');
  $('search').oninput=renderSidebar;$('provider').onchange=applyModels;$('send').onclick=submit;$('stop').onclick=()=>state.controller?.abort();
  $('prompt').onkeydown=e=>{if(e.key==='Enter'&&!e.shiftKey&&!e.isComposing){e.preventDefault();submit();}};
