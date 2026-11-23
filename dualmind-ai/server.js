@@ -99,9 +99,19 @@ export const server=http.createServer(async(req,res)=>{
       if (legacy) call.body.stream = false;
       const upstream=await fetch(call.url,{method:'POST',headers:call.headers,body:JSON.stringify(call.body),signal:abort.signal});
       if(!upstream.ok){
-        await upstream.body?.cancel();
-        const hints = {401:'تحقق من مفتاح API في Render.',403:'تحقق من صلاحيات المفتاح والنموذج.',404:'تحقق من اسم النموذج وصلاحية الوصول إليه.',429:'تحقق من الرصيد وحدود الطلبات.'};
-        return send(res,upstream.status,{error:`${payload.provider} (${upstream.status}). ${hints[upstream.status] || 'تعذّر تنفيذ الطلب لدى المزوّد.'}`});
+        // Return the upstream error category to the authenticated app without logging or exposing credentials.
+        const hints = {400:'الطلب غير صالح أو تم الوصول لحد الإنفاق.',401:'تحقق من مفتاح API في Render.',403:'تحقق من صلاحيات المفتاح والنموذج.',404:'تحقق من اسم النموذج وصلاحية الوصول إليه.',429:'تحقق من الرصيد وحدود الطلبات.'};
+        let category = '', detail = '';
+        try {
+          const raw = await upstream.text();
+          const upstreamError = JSON.parse(raw)?.error;
+          if(typeof upstreamError?.type === 'string') category = upstreamError.type.slice(0,70);
+          if(typeof upstreamError?.message === 'string') detail = upstreamError.message;
+        } catch {/* Some providers return non-JSON error bodies. */}
+        detail = detail.replace(/sk-(?:proj-)?[a-zA-Z0-9_-]+/g,'[REDACTED]')
+          .replace(/(Authorization|x-api-key)\\s*[:=]\\s*[^\\s,;]+/gi,'$1=[REDACTED]')
+          .slice(0,280);
+        return send(res,upstream.status,{error:`${payload.provider} (${upstream.status})${category ? ' ' + category : ''}: ${detail || hints[upstream.status] || 'تعذّر تنفيذ الطلب لدى المزوّد.'}`});
       }
       if (legacy) {
         const data = await upstream.json();
