@@ -5,7 +5,7 @@ export const VALID_TYPES = new Set(['image/png','image/jpeg','image/webp','image
 
 export function validateRequest(payload) {
   if (!payload || !['openai', 'anthropic', 'gemini', 'groq'].includes(payload.provider)) throw new Error('Invalid provider');
-  if (typeof payload.model !== 'string' || !/^[a-zA-Z0-9_.:-]{2,90}$/.test(payload.model)) throw new Error('Invalid model');
+  if (typeof payload.model !== 'string' || !/^[a-zA-Z0-9_./:-]{2,90}$/.test(payload.model)) throw new Error('Invalid model');
   if (!Array.isArray(payload.messages) || payload.messages.length < 1 || payload.messages.length > 32) throw new Error('Invalid message history');
   for (const m of payload.messages) {
     if (!m || !['user','assistant'].includes(m.role) || typeof m.text !== 'string' || m.text.length > 40000) throw new Error('Invalid message');
