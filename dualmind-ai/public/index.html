@@ -1,32 +1,32 @@
 <!doctype html>
 <html lang="ar" dir="rtl">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="theme-color" content="#111827">
-  <title>DualMind AI — ChatGPT + Claude</title>
-  <link rel="stylesheet" href="/style.css">
+ <meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+ <meta name="theme-color" content="#101828"><meta name="description" content="DualMind AI — Your independent OpenAI and Anthropic workspace">
+ <title>DualMind AI · OpenAI + Claude</title><link rel="stylesheet" href="/style.css">
 </head>
 <body>
-  <header class="top"><div class="brand"><span class="logo">D</span><div><strong>DualMind AI</strong><small>OpenAI + Anthropic | استضافة خاصة</small></div></div><div class="topactions"><button id="clear">محادثة جديدة</button><button id="export">تصدير</button></div></header>
-  <main>
-    <aside class="options">
-      <h2>التحكم</h2>
-      <label>مزود الذكاء الاصطناعي<select id="provider"><option value="openai">OpenAI · GPT</option><option value="anthropic">Anthropic · Claude</option></select></label>
-      <label>النموذج<select id="model"></select></label>
-      <label>كلمة مرور التطبيق<input id="password" type="password" placeholder="APP_PASSWORD" autocomplete="off"></label>
-      <button id="savePass" class="secondary">حفظ كلمة المرور لهذه الجلسة</button>
-      <label class="checkbox"><input type="checkbox" id="compare"> قارن الردود بين OpenAI وClaude</label>
-      <p id="status">جاري التحقق من إعدادات الخادم…</p>
-      <p class="notice">تُحفظ المحادثات في متصفحك المحلي، وتُرسل الرسائل إلى مزود النموذج الذي تختاره. لا تُرفع مفاتيح API إلى المتصفح.</p>
-      <button id="wipe" class="danger">حذف السجل المحلي</button>
-    </aside>
-    <section class="chat">
-      <div class="messages" id="messages"><div class="welcome"><h1>مساعد واحد، نموذجان</h1><p>اكتب سؤالك، واختر GPT أو Claude، أو شغّل المقارنة بينهما.</p></div></div>
-      <form id="composer"><textarea id="prompt" rows="2" placeholder="اكتب رسالتك هنا..." required></textarea><button type="submit" id="send">إرسال</button></form>
-      <p class="footnote">التطبيق يعتمد على مفاتيح API الخاصة بك؛ قد تترتب رسوم استخدام منفصلة.</p>
-    </section>
+<div class="app">
+  <aside id="sidebar" class="sidebar">
+   <div class="brand"><span class="logo">◈</span><div><strong>DualMind</strong><small>مساعدك الذكي المستقل</small></div><button id="closeSide" class="icon small mobile" aria-label="إغلاق القائمة">✕</button></div>
+   <button id="newChat" class="new-btn">＋ <span>محادثة جديدة</span></button>
+   <input id="search" class="search" type="search" placeholder="ابحث في المحادثات..." aria-label="البحث في المحادثات">
+   <nav id="chatList" class="chat-list" aria-label="المحادثات السابقة"></nav>
+   <div class="side-bottom"><button id="exportAll" class="ghost">⇩ تصدير المحادثات</button><button id="importAll" class="ghost">⇧ استيراد ملف JSON</button><input id="importFile" hidden type="file" accept=".json,application/json"><button id="settingsBtn" class="ghost">⚙ الإعدادات والخصوصية</button><small class="side-foot">بيانات المحادثات محفوظة في متصفحك، وليس في قاعدة بيانات على الخادم</small></div>
+  </aside>
+  <main class="main">
+   <header class="topbar"><button id="openSide" class="icon mobile" aria-label="فتح القائمة">☰</button><div class="titleWrap"><strong id="conversationTitle">محادثة جديدة</strong><span class="subline" id="providerStatus">اتصل بأحد المزودين للبدء</span></div><button id="themeBtn" class="icon" title="الوضع الليلي أو الفاتح" aria-label="تغيير المظهر">◐</button></header>
+   <section id="workspace" class="workspace">
+    <div id="welcome" class="welcome"><div class="hero-mark">◈</div><h1>فكّر بطريقتين.</h1><p>استخدم نماذج OpenAI وClaude في مساحة واحدة، مع تحكمك بمفاتيح الاتصال وسجل المحادثات.</p><div class="suggestions"><button data-prompt="اشرح لي مفهوم الذكاء الاصطناعي بأسلوب بسيط">اشرح مفهومًا علميًا</button><button data-prompt="راجع هذا الكود وحدد الثغرات والأخطاء المحتملة">راجع كودًا برمجيًا</button><button data-prompt="قارن بين فكرتين للمشاريع مع ذكر نقاط القوة والضعف">قارن بين فكرتين</button><button data-prompt="أريد تحليلًا موضوعيًا لخبر سياسي مع توضيح ما هو مؤكد وما هو غير مؤكد">حلّل خبرًا بموضوعية</button></div></div>
+    <div id="messages" class="messages" role="log" aria-label="محتوى المحادثة" aria-live="polite"></div>
+   </section>
+   <div class="dock"><div id="attachments" class="attachments" hidden></div>
+    <div class="compose"><textarea id="prompt" rows="1" placeholder="اكتب رسالتك..." aria-label="اكتب رسالة"></textarea><div class="compose-actions"><div class="compose-group"><label class="file-btn" title="رفع صورة أو PDF">📎<input id="attachmentInput" type="file" accept="image/png,image/jpeg,image/webp,image/gif,application/pdf" multiple hidden></label><button id="speechBtn" class="icon" title="إملاء صوتي إذا كان المتصفح يدعمه" aria-label="إملاء صوتي">♬</button><label class="toggle"><input id="webSearch" type="checkbox"><span>بحث ويب</span></label><label class="toggle"><input id="compare" type="checkbox"><span>مقارنة</span></label></div><div class="compose-group"><select id="provider" aria-label="المزوّد"><option value="openai">OpenAI</option><option value="anthropic">Claude</option></select><select id="model" aria-label="النموذج"></select><button id="send" class="send" title="إرسال">↑</button><button id="stop" class="send stop" title="إيقاف" hidden>■</button></div></div></div>
+    <p class="disclaimer">ليس منتجًا رسميًا من OpenAI أو Anthropic · استخدام واجهات API قد يكلّف رسومًا</p>
+   </div>
   </main>
-  <script src="/app.js" defer></script>
+ </div>
+ <dialog id="settingsDialog"><form method="dialog" class="settings"><header><h2>الإعدادات والخصوصية</h2><button class="icon" value="cancel" aria-label="إغلاق">✕</button></header><p>مفاتيح API تبقى على الخادم. المحادثات محفوظة في مساحة تخزين المتصفح (IndexedDB) وتُرسل لمزود النموذج عند الطلب.</p><label>كلمة مرور التطبيق (إذا ضبطتها على الخادم)<input id="password" type="password" placeholder="APP_PASSWORD" autocomplete="off"></label><label>التعليمات الدائمة للنموذج<textarea id="system" rows="3" placeholder="أجب بلغة المستخدم مع توضيح مستوى الثقة..."></textarea></label><div class="setting-actions"><button id="saveSettings" type="button" class="primary">حفظ</button><button id="wipeData" type="button" class="danger">مسح جميع المحادثات المحلية</button></div><p class="hint">⚠ لا تخزّن أرقام بطاقات أو مفاتيح سرية في المحادثات. لا تنشر السيرفر بدون APP_PASSWORD وHTTPS.</p></form></dialog>
+ <div id="toast" role="status" aria-live="polite"></div><script type="module" src="/app.js"></script>
 </body>
 </html>

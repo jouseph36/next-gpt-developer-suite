@@ -1,61 +1,136 @@
 import http from 'node:http';
 import {readFile} from 'node:fs/promises';
-import {fileURLToPath} from 'node:url';
 import path from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {timingSafeEqual} from 'node:crypto';
+import {validateRequest, providerRequest, extractEvent, SSEParser} from './providers.js';
 
-const ROOT=path.dirname(fileURLToPath(import.meta.url));
-const PORT=Number(process.env.PORT||3000);
-const password=process.env.APP_PASSWORD||'';
-if(process.env.NODE_ENV==='production' && password.length<20){console.error('APP_PASSWORD must have at least 20 characters in production');process.exit(1);}
-const models={openai:[process.env.OPENAI_MODEL||'gpt-6.1-sol',process.env.OPENAI_SMALL_MODEL||'gpt-6-luna'],anthropic:[process.env.ANTHROPIC_MODEL||'claude-sonnet-5-5',process.env.ANTHROPIC_SMALL_MODEL||'claude-haiku-5-5']};
-const headers={'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Frame-Options':'DENY','Cache-Control':'no-store','Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; connect-src 'self'; base-uri 'none'; object-src 'none'; frame-ancestors 'none'"};
-function reply(res,code,data){res.writeHead(code,{...headers,'Content-Type':'application/json; charset=utf-8'});res.end(JSON.stringify(data));}
-function authorized(req){if(!password)return process.env.NODE_ENV!=='production';const value=(req.headers.authorization||'').replace(/^Bearer /,'');const a=Buffer.from(value), b=Buffer.from(password);return a.length===b.length&&timingSafeEqual(a,b);}
-async function body(req){const parts=[];let total=0;for await(const chunk of req){total+=chunk.length;if(total>350000){throw new Error('Request too large');}parts.push(chunk);}return JSON.parse(Buffer.concat(parts).toString('utf8'));}
-function clean(messages){if(!Array.isArray(messages)||!messages.length||messages.length>24)throw new Error('Invalid conversation length');return messages.map(m=>{if(!m||!['user','assistant'].includes(m.role)||typeof m.content!=='string'||m.content.length>20000)throw new Error('Invalid conversation content');return {role:m.role,content:m.content};});}
-async function ask(which,model,messages){
-  const controller=new AbortController();const timer=setTimeout(()=>controller.abort(),110000);
-  try{
-    if(which==='openai'){
-      const key=process.env.OPENAI_API_KEY;if(!key)throw new Error('OPENAI_API_KEY is not configured');
-      const response=await fetch('https://api.openai.com/v1/responses',{method:'POST',headers:{'Authorization':'Bearer '+key,'Content-Type':'application/json'},body:JSON.stringify({model,input:messages.map(m=>({role:m.role,content:m.content})),store:false}),signal:controller.signal});
-      const data=await response.json();if(!response.ok)throw new Error(data.error?.message||'OpenAI API error '+response.status);
-      return (data.output||[]).flatMap(x=>x.content||[]).filter(x=>x.type==='output_text').map(x=>x.text).join('\n')||data.output_text||'[No text returned]';
-    }
-    if(which==='anthropic'){
-      const key=process.env.ANTHROPIC_API_KEY;if(!key)throw new Error('ANTHROPIC_API_KEY is not configured');
-      const response=await fetch('https://api.anthropic.com/v1/messages',{method:'POST',headers:{'x-api-key':key,'anthropic-version':'2023-06-01','Content-Type':'application/json'},body:JSON.stringify({model,max_tokens:4096,messages}),signal:controller.signal});
-      const data=await response.json();if(!response.ok)throw new Error(data.error?.message||'Anthropic API error '+response.status);
-      return (data.content||[]).filter(x=>x.type==='text').map(x=>x.text).join('\n')||'[No text returned]';
-    }
-    throw new Error('Unknown provider');
-  }finally{clearTimeout(timer);}
+const root=path.dirname(fileURLToPath(import.meta.url));
+// Minimal .env loader for local development; production environment variables take precedence.
+try {
+  const raw=await readFile(path.join(root,'.env'),'utf8');
+  for(const line of raw.split(/\r?\n/)){
+    const s=line.trim();if(!s||s.startsWith('#'))continue;
+    const index=s.indexOf('=');if(index<1)continue;
+    const key=s.slice(0,index).trim();let value=s.slice(index+1).trim();
+    if((value.startsWith('"')&&value.endsWith('"'))||(value.startsWith("'")&&value.endsWith("'"))) value=value.slice(1,-1);
+    if(!process.env[key])process.env[key]=value;
+  }
+}catch{}
+if(process.env.NODE_ENV==='production' && (process.env.APP_PASSWORD || '').length < 20) {
+  console.error('APP_PASSWORD must contain at least 20 characters in production.');process.exit(1);
 }
-const visits=new Map();
-function limit(req){const ip=(req.socket.remoteAddress||'unknown');const now=Date.now();const list=(visits.get(ip)||[]).filter(t=>now-t<60000);if(list.length>=12)return false;list.push(now);visits.set(ip,list);if(visits.size>3000)visits.clear();return true;}
-const server=http.createServer(async(req,res)=>{
-  const url=new URL(req.url,'http://localhost').pathname;
-  if(url==='/api/health')return reply(res,200,{ok:true});
-  if(url==='/api/config')return reply(res,200,{providers:{openai:!!process.env.OPENAI_API_KEY,anthropic:!!process.env.ANTHROPIC_API_KEY},models,secured:!!password});
-  if(url==='/api/chat'&&req.method==='POST'){
-    if(!authorized(req))return reply(res,401,{error:'Incorrect password'});
-    if(!limit(req))return reply(res,429,{error:'Too many requests; try again later'});
-    try{
-      const input=await body(req);
-      const messages=clean(input.messages);
-      const provider=input.provider;
-      if(!['openai','anthropic'].includes(provider)||!models[provider].includes(input.model))return reply(res,400,{error:'Invalid provider/model'});
-      if(messages.at(-1).role!=='user')return reply(res,400,{error:'Last message must be from user'});
-      const answer=await ask(provider,input.model,messages);return reply(res,200,{answer,provider,model:input.model});
-    }catch(e){return reply(res,400,{error:String(e.message||e).slice(0,400)});}
+
+const models = {
+  openai: [process.env.OPENAI_MODEL || 'gpt-6.1-sol', process.env.OPENAI_SMALL_MODEL || 'gpt-6-luna'],
+  anthropic: [...new Set([
+    process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5',
+    process.env.ANTHROPIC_SMALL_MODEL || 'claude-haiku-5-5',
+    process.env.ANTHROPIC_LARGE_MODEL || 'claude-opus-5-5'
+  ])]
+};
+const requestWindows = new Map();
+const minute = 60000;
+function allowChat(address) {
+  const now = Date.now();
+  const recent = (requestWindows.get(address) || []).filter(time => now - time < minute);
+  if (recent.length >= 12) return false;
+  recent.push(now);
+  requestWindows.set(address, recent);
+  return true;
+}
+setInterval(() => {
+  const cutoff = Date.now() - minute;
+  for (const [address, times] of requestWindows) {
+    if (times.at(-1) <= cutoff) requestWindows.delete(address);
   }
-  const files={'/':['public','index.html','text/html; charset=utf-8'],'/app.js':['public','app.js','text/javascript; charset=utf-8'],'/style.css':['public','style.css','text/css; charset=utf-8']};
-  if(files[url]&&req.method==='GET'){
-    const [folder,file,mime]=files[url];
-    try{const data=await readFile(path.join(ROOT,folder,file));res.writeHead(200,{...headers,'Content-Type':mime});return res.end(data);}
-    catch{return reply(res,500,{error:'UI file missing'});}
+}, minute).unref();
+const secureHeaders={
+  'X-Content-Type-Options':'nosniff','Referrer-Policy':'no-referrer','X-Frame-Options':'DENY',
+  'Cross-Origin-Resource-Policy':'same-origin',
+  'Content-Security-Policy':"default-src 'self'; script-src 'self'; style-src 'self'; img-src 'self' data: blob:; connect-src 'self'; base-uri 'none'; frame-ancestors 'none'; object-src 'none'"
+};
+function send(res,status,obj){res.writeHead(status,{...secureHeaders,'Content-Type':'application/json; charset=utf-8','Cache-Control':'no-store'});res.end(JSON.stringify(obj));}
+function authorized(req){
+  const expected=process.env.APP_PASSWORD;
+  if(!expected)return true;
+  const got=req.headers.authorization?.startsWith('Bearer ') ? req.headers.authorization.slice(7):'';
+  const a=Buffer.from(got), b=Buffer.from(expected);
+  return a.length===b.length && timingSafeEqual(a,b);
+}
+async function bodyJson(req){
+  const chunks=[];let size=0;
+  for await(const chunk of req){size+=chunk.length;if(size>14*1024*1024){const e=new Error('Request exceeds 14 MiB');e.status=413;throw e;}chunks.push(chunk);}
+  try{return JSON.parse(Buffer.concat(chunks).toString('utf8'));}catch{const e=new Error('Invalid JSON');e.status=400;throw e;}
+}
+const types={'.html':'text/html; charset=utf-8','.js':'text/javascript; charset=utf-8','.css':'text/css; charset=utf-8','.svg':'image/svg+xml','.png':'image/png'};
+async function staticFile(req,res,pathname){
+  const allowed={'/':'index.html','/index.html':'index.html','/app.js':'app.js','/style.css':'style.css'};
+  if(!allowed[pathname])return send(res,404,{error:'Not found'});
+  const file=path.join(root,'public',allowed[pathname]);
+  const buf=await readFile(file);
+  res.writeHead(200,{...secureHeaders,'Content-Type':types[path.extname(file)]||'application/octet-stream','Cache-Control':'no-store'});res.end(buf);
+}
+
+export const server=http.createServer(async(req,res)=>{
+  const pathname=new URL(req.url,'http://localhost').pathname;
+  if(pathname==='/api/health')return send(res,200,{ok:true});
+  if(pathname==='/api/config' && req.method==='GET')return send(res,200,{requiresPassword:!!process.env.APP_PASSWORD,secured:!!process.env.APP_PASSWORD,providers:{openai:!!process.env.OPENAI_API_KEY,anthropic:!!process.env.ANTHROPIC_API_KEY},models});
+  if(pathname==='/api/auth' && req.method==='POST')return send(res,authorized(req)?200:401,{ok:authorized(req)});
+  if(pathname==='/api/chat' && req.method==='POST') {
+    if(!authorized(req))return send(res,401,{error:'Incorrect app password'});
+    if (!allowChat(req.socket.remoteAddress)) return send(res,429,{error:'Too many requests. Please try again in a minute.'});
+    let payload;
+    let legacy = false;
+    try {
+      payload = await bodyJson(req);
+      // The original deployed client sends plain content and reads a single JSON answer.
+      legacy = Array.isArray(payload?.messages) && payload.messages.length > 0 &&
+        payload.messages.every(message => typeof message?.content === 'string' && message.text === undefined);
+      if (legacy) payload.messages = payload.messages.map(({role, content}) => ({role, text: content}));
+      validateRequest(payload);
+    } catch(e) {return send(res,e.status||400,{error:e.message});}
+    if(!models[payload.provider].includes(payload.model))return send(res,400,{error:'Model is not enabled in server configuration'});
+    let call;try{call=providerRequest(payload);}catch(e){return send(res,400,{error:e.message});}
+    const abort=new AbortController();let downstreamClosed=false;
+    res.on('close',()=>{downstreamClosed=true;abort.abort();});
+    const timer = setTimeout(() => abort.abort(), 110000);
+    try {
+      if (legacy) call.body.stream = false;
+      const upstream=await fetch(call.url,{method:'POST',headers:call.headers,body:JSON.stringify(call.body),signal:abort.signal});
+      if(!upstream.ok){
+        await upstream.body?.cancel();
+        const hints = {401:'تحقق من مفتاح API في Render.',403:'تحقق من صلاحيات المفتاح والنموذج.',404:'تحقق من اسم النموذج وصلاحية الوصول إليه.',429:'تحقق من الرصيد وحدود الطلبات.'};
+        return send(res,upstream.status,{error:`${payload.provider} (${upstream.status}). ${hints[upstream.status] || 'تعذّر تنفيذ الطلب لدى المزوّد.'}`});
+      }
+      if (legacy) {
+        const data = await upstream.json();
+        const answer = payload.provider === 'openai'
+          ? (data.output || []).flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n') || data.output_text
+          : (data.content || []).filter(item => item.type === 'text').map(item => item.text).join('\n');
+        return send(res,200,{answer: answer || '[No text returned]', provider: payload.provider, model: payload.model});
+      }
+      if(!upstream.body)throw new Error('Provider returned no stream');
+      res.writeHead(200,{...secureHeaders,'Content-Type':'text/event-stream; charset=utf-8','Cache-Control':'no-cache, no-transform','Connection':'keep-alive','X-Accel-Buffering':'no'});
+      const emit=obj=>{if(!downstreamClosed)res.write('data: '+JSON.stringify(obj)+'\n\n');};
+      emit({type:'ready'});
+      const parser=new SSEParser(event=>{
+        const out=extractEvent(payload.provider,event);
+        if(out?.delta)emit({type:'delta',text:out.delta});
+        if(out?.error)emit({type:'error',message:out.error});
+      });
+      const reader=upstream.body.getReader();const decoder=new TextDecoder();
+      while(true){const {done,value}=await reader.read();if(done)break;parser.feed(decoder.decode(value,{stream:true}));}
+      parser.feed(decoder.decode());parser.end();emit({type:'done'});res.end();
+    }catch(e){if(!downstreamClosed){if(res.headersSent){res.write('data: '+JSON.stringify({type:'error',message:e.message})+'\n\n');res.end();}else send(res,502,{error:e.message});}}
+    finally { clearTimeout(timer); }
+    return;
   }
-  return reply(res,404,{error:'Not found'});
+  if(req.method!=='GET')return send(res,405,{error:'Method not allowed'});
+  try{await staticFile(req,res,pathname);}catch(e){send(res,500,{error:'Static file error'});}
 });
-server.listen(PORT,'0.0.0.0',()=>console.log('DualMind listening on '+PORT));
+
+if(process.env.NODE_ENV!=='test'){
+  const port=Number(process.env.PORT||3000);
+  server.listen(port,'0.0.0.0',()=>console.log(`DualMind AI ready at http://localhost:${port}`));
+}

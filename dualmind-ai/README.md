@@ -1,26 +1,27 @@
-# DualMind AI — deployment edition
+# DualMind AI
 
-A private-use, self-hosted Arabic-first web chat for OpenAI and Anthropic APIs.
-This is a lightweight working deployment edition; the full original v1.0 ZIP has additional features (streaming and attachments).
+A minimal **independent**, Arabic-first web app that uses the official OpenAI Responses and Anthropic Messages APIs. It is **not** the proprietary ChatGPT or Claude source code and does not replicate all their features.
 
-## Run
+## Start
 
-- Node.js 20+
-- Set `APP_PASSWORD` (20+ characters) and at least one of `OPENAI_API_KEY`, `ANTHROPIC_API_KEY`.
-- Run `node server.js`.
-- Open http://localhost:3000.
+Requires Node.js 20+. No npm dependencies.
 
-The server holds API keys; the client never receives them.
-The app stores chat history in the browser's localStorage; clear browser data to remove it.
-Never commit real keys. Requests to providers may incur separate charges.
+```bash
+cp .env.example .env
+# Edit .env with your own OPENAI_API_KEY and/or ANTHROPIC_API_KEY
+npm start
+```
 
-## Render setup
+Then open `http://localhost:3000`. If `APP_PASSWORD` is set, enter it in the app settings before chatting. Production requires a password of at least 20 characters.
 
-- Source repository: `jouseph36/next-gpt-developer-suite`
-- Branch: `deploy/dualmind-ai`
-- Runtime: Node
-- Build command: `echo Ready`
-- Start command: `node dualmind-ai/server.js`
-- Environment: `NODE_ENV=production`, `APP_PASSWORD` (secret), plus the API keys added via Render dashboard.
+The Render service uses the `deploy/dualmind-ai` branch and starts `node dualmind-ai/server.js` from the repository root. Add `OPENAI_API_KEY` or `ANTHROPIC_API_KEY` in the service's Environment page and select **Save and deploy**. Use both keys to compare providers.
 
-Use Render Environment dashboard for secrets, not GitHub.
+Features: streaming, provider/model switching, side-by-side model comparison via parallel replies, image/PDF upload, browser-only IndexedDB chat history, local import/export, optional provider web-search API tools, mobile RTL design.
+
+Limitations: not a full ChatGPT/Claude clone; no native mobile client, realtime voice, image generation, agent execution, third-party account integrations, shared/multiuser server data, or automated backup. Uploaded attachments are not replayed to provider in subsequent messages. API fees and provider account credentials are separate from ChatGPT or Claude subscriptions. See `README_AR.md` for full Arabic instructions, Render setup, security and privacy notes.
+
+```bash
+npm test
+```
+
+MIT license for this independently written scaffold.

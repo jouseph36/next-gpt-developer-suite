@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: dualmind-ai-jouseph
+    runtime: node
+    plan: free
+    region: frankfurt
+    branch: deploy/dualmind-ai
+    rootDir: dualmind-ai
+    buildCommand: npm test
+    startCommand: npm start
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: APP_PASSWORD
+        generateValue: true
+      # Set the desired provider API keys in the service's Environment page.
