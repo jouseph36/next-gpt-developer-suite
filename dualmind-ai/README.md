@@ -1,3 +1,7 @@
+# DualMind AI — GPT, Claude, Gemini & Groq
+
+**New:** Gemini and Groq API adapters for eligible free-tier accounts (rate limits apply; not guaranteed everywhere). Create your own keys at https://aistudio.google.com/api-keys and https://console.groq.com/keys, then configure `GEMINI_API_KEY` and/or `GROQ_API_KEY` via Render Environment. Never commit keys. Gemini supports image/PDF prompts; Groq is text-only in this build. Web-search tools are disabled for these free-tier integrations. Compare mode uses only Gemini and Groq to avoid surprise paid API calls. API subscriptions are separate from ChatGPT and Claude subscriptions. See README_AR.md for step-by-step Arabic instructions.
+
 # DualMind AI
 
 A minimal **independent**, Arabic-first web app that uses the official OpenAI Responses and Anthropic Messages APIs. It is **not** the proprietary ChatGPT or Claude source code and does not replicate all their features.
