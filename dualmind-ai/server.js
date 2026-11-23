@@ -27,7 +27,9 @@ const models = {
     process.env.ANTHROPIC_MODEL || 'claude-sonnet-5-5',
     process.env.ANTHROPIC_SMALL_MODEL || 'claude-haiku-5-5',
     process.env.ANTHROPIC_LARGE_MODEL || 'claude-opus-5-5'
-  ])]
+  ])],
+  gemini: [...new Set([process.env.GEMINI_MODEL || 'gemini-3.5-flash-lite',process.env.GEMINI_SECOND_MODEL || 'gemini-3.8-flash'])],
+  groq: [...new Set([process.env.GROQ_MODEL || 'openai/gpt-oss-20b',process.env.GROQ_SECOND_MODEL || 'openai/gpt-oss-120b'])]
 };
 const requestWindows = new Map();
 const minute = 60000;
@@ -75,7 +77,7 @@ async function staticFile(req,res,pathname){
 export const server=http.createServer(async(req,res)=>{
   const pathname=new URL(req.url,'http://localhost').pathname;
   if(pathname==='/api/health')return send(res,200,{ok:true});
-  if(pathname==='/api/config' && req.method==='GET')return send(res,200,{requiresPassword:!!process.env.APP_PASSWORD,secured:!!process.env.APP_PASSWORD,providers:{openai:!!process.env.OPENAI_API_KEY,anthropic:!!process.env.ANTHROPIC_API_KEY},models});
+  if(pathname==='/api/config' && req.method==='GET')return send(res,200,{requiresPassword:!!process.env.APP_PASSWORD,secured:!!process.env.APP_PASSWORD,providers:{openai:!!process.env.OPENAI_API_KEY,anthropic:!!process.env.ANTHROPIC_API_KEY,gemini:!!process.env.GEMINI_API_KEY,groq:!!process.env.GROQ_API_KEY},models});
   if(pathname==='/api/auth' && req.method==='POST')return send(res,authorized(req)?200:401,{ok:authorized(req)});
   if(pathname==='/api/chat' && req.method==='POST') {
     if(!authorized(req))return send(res,401,{error:'Incorrect app password'});
@@ -96,7 +98,10 @@ export const server=http.createServer(async(req,res)=>{
     res.on('close',()=>{downstreamClosed=true;abort.abort();});
     const timer = setTimeout(() => abort.abort(), 110000);
     try {
-      if (legacy) call.body.stream = false;
+      if (legacy) {
+        if (payload.provider === 'gemini') call.url = call.url.replace(':streamGenerateContent?alt=sse', ':generateContent');
+        else call.body.stream = false;
+      }
       const upstream=await fetch(call.url,{method:'POST',headers:call.headers,body:JSON.stringify(call.body),signal:abort.signal});
       if(!upstream.ok){
         // Return the upstream error category to the authenticated app without logging or exposing credentials.
@@ -117,7 +122,11 @@ export const server=http.createServer(async(req,res)=>{
         const data = await upstream.json();
         const answer = payload.provider === 'openai'
           ? (data.output || []).flatMap(item => item.content || []).filter(item => item.type === 'output_text').map(item => item.text).join('\n') || data.output_text
-          : (data.content || []).filter(item => item.type === 'text').map(item => item.text).join('\n');
+          : payload.provider === 'anthropic'
+            ? (data.content || []).filter(item => item.type === 'text').map(item => item.text).join('\n')
+            : payload.provider === 'groq'
+              ? (data.choices?.[0]?.message?.content || '')
+              : (data.candidates?.[0]?.content?.parts || []).filter(part => !part.thought && part.text).map(part=>part.text).join('\n');
         return send(res,200,{answer: answer || '[No text returned]', provider: payload.provider, model: payload.model});
       }
       if(!upstream.body)throw new Error('Provider returned no stream');
