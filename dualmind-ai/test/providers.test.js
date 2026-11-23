@@ -38,3 +38,34 @@ test('SSE delimiters can be split between carriage return and line feed', () => 
  parser.end();
  assert.deepEqual(events, [{n:1},{n:2}]);
 });
+
+test('Gemini free-tier request uses server-side API key, conversation roles, and SSE', () => {
+ const ms=[{role:'user',text:'Hello',attachments:[{name:'x.png',type:'image/png',base64:'YWJj'}]},{role:'assistant',text:'Hi'},{role:'user',text:'Continue'}];
+ const p={provider:'gemini',model:'gemini-3.5-flash-lite',messages:ms,webSearch:false};
+ assert.equal(validateRequest(p),true);
+ const call=providerRequest(p,{GEMINI_API_KEY:'fixture'});
+ assert.match(call.url,/gemini-3\.5-flash-lite:streamGenerateContent\?alt=sse$/);
+ assert.equal(call.headers['x-goog-api-key'],'fixture');
+ assert.equal(call.body.contents[1].role,'model');
+ assert.equal(call.body.contents[0].parts[1].inlineData.mimeType,'image/png');
+ assert.equal(call.body.systemInstruction.parts[0].text.length>0,true);
+});
+test('Groq free-tier uses valid prefixed model, no browser credentials and textual SSE', () => {
+ const p={provider:'groq',model:'openai/gpt-oss-20b',messages:[{role:'user',text:'Hi'}],webSearch:false};
+ assert.equal(validateRequest(p),true);
+ const call=providerRequest(p,{GROQ_API_KEY:'fixture'});
+ assert.equal(call.url,'https://api.groq.com/openai/v1/chat/completions');
+ assert.equal(call.headers.Authorization,'Bearer fixture');
+ assert.equal(call.body.stream,true);
+ assert.equal(call.body.messages[1].content,'Hi');
+ assert.deepEqual(extractEvent('groq',{choices:[{delta:{content:'Hello'}}]}),{delta:'Hello'});
+});
+test('Gemini streaming emits text but does not leak thought parts', () => {
+ const response={candidates:[{content:{parts:[{text:'internal',thought:true},{text:'answer'}]}}]};
+ assert.deepEqual(extractEvent('gemini',response),{delta:'answer'});
+});
+test('Free-tier integration rejects unsupported expensive tools and attachments', () => {
+ const p={provider:'groq',model:'openai/gpt-oss-20b',messages:[{role:'user',text:'Hi',attachments:[{name:'x.pdf',type:'application/pdf',base64:'YWJj'}]}]};
+ assert.throws(()=>providerRequest(p,{GROQ_API_KEY:'key'}),/do not support file attachments/);
+ assert.throws(()=>providerRequest({provider:'gemini',model:'gemini-3.5-flash-lite',messages:[{role:'user',text:'Hi'}],webSearch:true},{GEMINI_API_KEY:'key'}),/Disable web search/);
+});
