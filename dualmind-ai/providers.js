@@ -4,7 +4,7 @@ export const MAX_FILE_BYTES = 3 * 1024 * 1024;
 export const VALID_TYPES = new Set(['image/png','image/jpeg','image/webp','image/gif','application/pdf']);
 
 export function validateRequest(payload) {
-  if (!payload || !['openai', 'anthropic'].includes(payload.provider)) throw new Error('Invalid provider');
+  if (!payload || !['openai', 'anthropic', 'gemini', 'groq'].includes(payload.provider)) throw new Error('Invalid provider');
   if (typeof payload.model !== 'string' || !/^[a-zA-Z0-9_.:-]{2,90}$/.test(payload.model)) throw new Error('Invalid model');
   if (!Array.isArray(payload.messages) || payload.messages.length < 1 || payload.messages.length > 32) throw new Error('Invalid message history');
   for (const m of payload.messages) {
@@ -40,6 +40,22 @@ function claudeParts(m) {
   return parts;
 }
 
+
+function geminiParts(m) {
+  const parts = [{text:m.text || ' '}];
+  if (m.role === 'user') for (const a of m.attachments || []) {
+    parts.push({inlineData:{mimeType:a.type,data:a.base64}});
+  }
+  return parts;
+}
+
+function groqMessages(messages, system) {
+  if (messages.some(m => m.attachments?.length)) {
+    throw new Error('Groq text models in this app do not support file attachments. Use Gemini for images or PDFs.');
+  }
+  return [{role:'system',content:system},...messages.map(m => ({role:m.role,content:m.text || ' '}))];
+}
+
 export function providerRequest({provider,model,messages,webSearch,system},env=process.env) {
   const commonSystem = (typeof system === 'string' ? system.slice(0,3000) : '') || 'Be accurate, helpful, and transparent about uncertainty. Reply in the user’s language.';
   if (provider === 'openai') {
@@ -48,6 +64,24 @@ export function providerRequest({provider,model,messages,webSearch,system},env=p
       url:env.OPENAI_API_URL||'https://api.openai.com/v1/responses',
       headers:{'Authorization':`Bearer ${env.OPENAI_API_KEY}`,'Content-Type':'application/json'},
       body:{model,instructions:commonSystem,input:messages.map(m=>({role:m.role,content:openaiParts(m)})),store:false,stream:true,...(webSearch?{tools:[{type:'web_search'}]}:{})}
+    };
+  }
+  if (provider === 'gemini') {
+    if (!env.GEMINI_API_KEY) throw new Error('GEMINI_API_KEY is not configured on the server');
+    if (webSearch) throw new Error('Disable web search for Gemini on this free-tier configuration.');
+    return {
+      url:`https://generativelanguage.googleapis.com/v1beta/models/${encodeURIComponent(model)}:streamGenerateContent?alt=sse`,
+      headers:{'x-goog-api-key':env.GEMINI_API_KEY,'Content-Type':'application/json'},
+      body:{systemInstruction:{parts:[{text:commonSystem}]},contents:messages.map(m=>({role:m.role === 'assistant' ? 'model' : 'user',parts:geminiParts(m)})),generationConfig:{maxOutputTokens:4096}}
+    };
+  }
+  if (provider === 'groq') {
+    if (!env.GROQ_API_KEY) throw new Error('GROQ_API_KEY is not configured on the server');
+    if (webSearch) throw new Error('Disable web search for Groq in the free-tier configuration.');
+    return {
+      url:'https://api.groq.com/openai/v1/chat/completions',
+      headers:{Authorization:`Bearer ${env.GROQ_API_KEY}`,'Content-Type':'application/json'},
+      body:{model,messages:groqMessages(messages,commonSystem),stream:true,max_completion_tokens:4096}
     };
   }
   if (!env.ANTHROPIC_API_KEY) throw new Error('ANTHROPIC_API_KEY is not configured on the server');
@@ -63,6 +97,15 @@ export function extractEvent(provider, data) {
   if (data.type === 'error' || data.type === 'response.failed') return {error: JSON.stringify(data.error||data.response?.error||data)};
   if (provider === 'openai' && data.type==='response.output_text.delta') return {delta:data.delta||''};
   if (provider === 'anthropic' && data.type==='content_block_delta' && data.delta?.type==='text_delta') return {delta:data.delta.text||''};
+  if (data.error) return {error: typeof data.error.message === 'string' ? data.error.message : 'Provider error'};
+  if (provider === 'groq' && data.choices?.[0]?.delta?.content) return {delta:data.choices[0].delta.content};
+  if (provider === 'gemini') {
+    if (data.promptFeedback?.blockReason) return {error:'Gemini blocked the prompt: '+data.promptFeedback.blockReason};
+    const parts=data.candidates?.[0]?.content?.parts || [];
+    const delta=parts.filter(part=>!part.thought && typeof part.text==='string').map(part=>part.text).join('');
+    if(delta) return {delta};
+  }
+
   return null;
 }
 
